@@ -258,6 +258,21 @@ QuicStreamProcessResetFrame(
         Stream->Flags.ReceiveEnabled = FALSE;
         Stream->Flags.ReceiveDataPending = FALSE;
 
+        //
+        // RFC 9000, Section 4.5: Once a final size for a stream is known, it
+        // cannot change. If RESET_STREAM carries a different FinalSize than
+        // the one already established (e.g. by a prior STREAM frame with FIN),
+        // the connection MUST be closed with FINAL_SIZE_ERROR.
+        //
+        if (Stream->RecvMaxLength != UINT64_MAX && FinalSize != Stream->RecvMaxLength) {
+            QuicTraceLogStreamWarning(
+                ResetMismatchedFinalSize,
+                Stream,
+                "Tried to reset with mismatched final size!");
+            QuicConnTransportError(Stream->Connection, QUIC_ERROR_FINAL_SIZE_ERROR);
+            return;
+        }
+
         uint64_t TotalRecvLength = QuicRecvBufferGetTotalLength(&Stream->RecvBuffer);
         if (TotalRecvLength > FinalSize) {
             //
